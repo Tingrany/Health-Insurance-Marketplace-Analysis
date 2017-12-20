@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {background-color: lightblue;text-align:center;margin: 0;
+}
+
+/* Create two equal columns that floats next to each other */
+.column {
+    float: left;
+    width: 50%;
+    padding: 10px;
+    height: 545px; /* Should be removed. Only for demonstration */
+}
+
+/* Clear floats after the columns */
+.row:after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
+/* Responsive layout - makes the two columns stack on top of each other instead of next to each other */
+@media (max-width: 600px) {
+    .column {
+        width: 100%;
+    }
+}
+
+h1 { color: white;text-align: center;}
+ph {color:white;font-family: verdana;font-size: 20px;text-align: center;}
+p {color:white;font-family: verdana;font-size: 20px;text-align: left;}
+pn {color:white;font-family: verdana;font-size: 20px;text-align: left;}
+
+</style>
+</head>
+<body>
+
+  <h1>Individual Rate Prediction</h1>
+
+  <ph>Do you want to know how much will you pay for your health insurance? Take one minute to find it out!</ph>
+  <br>
+  <br>
+
+<div class="row">
+  <div class="column" style="background-color:#aaa;">
+<p>1. Age:</p>
+<p><input type="text" id="txt1" name="text1"></p><br>
+<p>2. Expected Coinsurance(0-1):</p>
+<p>(Percentage you need to pay besides deductible)</p>
+<p><input type="text" id="txt2" name="text2"></p><br>
+
+<p>3. Is Essential Health Benefit?:
+<input type="checkbox" id="txt3"></p>
+<p>e.g.<br>
+(1) ambulatory patient services; <br>
+(2) emergency services; <br>
+(3) hospitalization;<br></p><br>
+
+</div>
+<div class="column" style="background-color:#bbb;">
+<p>4. Is in National Network?:<input type="checkbox" id="txt5"><br></p>
+<p>5. Is Offered with Wellness Program?:<input type="checkbox" id="txt6"><br></p>
+<p>6. Choose Expected Metal Level:<br></p>
+<p><input type="radio" name ="ML" id="ML" value="1"> Bronze<br></p>
+<p><input type="radio" name ="ML" id="ML" value="2"> Silver<br></p>
+<p><input type="radio" name ="ML" id="ML" value="3"> Gold<br></p>
+<p><input type="radio" name ="ML" id="ML" value="4"> Platinum<br></p>
+<p><input type="radio" name ="ML" id="ML" value="3"> High<br></p>
+<p><input type="radio" name ="ML" id="ML" value="1"> Low<br></p>
+<p><input type="radio" name ="ML" id="ML" value="0"> Catastrophic<br></p>
+<p><button onclick="myFunction()">Try it</button><br/></p> 
+<p id="demo"></p>
+</div>
+</div>
+
+<script>
+    function myFunction() 
+    {
+      var x1 = document.getElementById("txt1").value;
+      var x2 = document.getElementById("txt2").value; 
+      var x3b = document.getElementById('txt3').checked;
+      var x3 = x3b ? 1 : 0;
+      var x5b = document.getElementById('txt5').checked;
+      var x5 = x5b ? 1 : 0;
+      var x6b = document.getElementById('txt6').checked;
+      var x6 = x6b ? 1 : 0;
+      var x7 = document.querySelector('input[name="ML"]:checked').value;
+      var y = 10.67*parseFloat(x1) + (-38.19)*parseFloat(x2) 
+              +6.51 * parseFloat(x3)
+              +30.85*parseFloat(x5) +(-71.4)*parseFloat(x6)
+              +32.13*parseFloat(x7);
+          y = parseInt(y);
+      document.getElementById("demo").innerHTML ="Your estimated individual rate is: "+y;
+    }
+</script>
+</body>
+</html>
