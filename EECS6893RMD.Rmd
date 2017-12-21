@@ -1,0 +1,278 @@
+---
+output:
+  html_document: default
+  word_document: default
+---
+Health Insurance Marketplace Exploration by Chenhui Huang
+============================================================
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+# Load all of the packages that you end up using in your analysis in this code
+# chunk.
+
+library(ggplot2)
+library(tidyverse)
+library(gridExtra)
+library(knitr)
+library(GGally)
+library(maptools)
+library(mapdata)
+library(ggthemes)
+library(viridis)
+library(gmodels)
+library(sparklyr)
+library(DBI)
+library(lubridate)
+sc <- spark_connect(master = "local")
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, Load_the_Data}
+benefit2014 = read_csv('benefits_clean_2014.csv')
+#benefit2015 = read_csv('benefits_clean_2015.csv')
+#benefit2016 = read_csv('benefits_clean_2016.csv')
+benefit2014$BusinessYear = as.factor(benefit2014$BusinessYear)
+benefit2014$BenefitName <- as.factor(benefit2014$BenefitName)
+benefit2014$IssuerId <- as.factor(benefit2014$IssuerId)
+benefit2014 <- benefit2014 %>% select(-(PlanId))
+benefit2014 <- benefit2014 %>% rename(PlanId = StandardComponentId)
+
+rate2014 = read_csv('rate_clean_2014.csv')
+#rate2015 = read_csv('rate_clean_2015.csv')
+#rate2016 = read_csv('rate_clean_2016.csv')
+
+rate2014$Age = as.factor(rate2014$Age)
+rate2014$BusinessYear = as.factor(rate2014$BusinessYear)
+rate2014$IssuerId = as.factor(rate2014$IssuerId)
+rate2014$IndividualTobaccoRate = as.numeric(rate2014$IndividualTobaccoRate)
+
+attribute2014 = read_csv('attributes_clean_2014.csv')
+#attribute2015 = read_csv('attributes_clean_2015.csv')
+#attribute2016 = read_csv('attributes_clean_2016.csv')
+
+attribute2014$IssuerId <- as.factor(attribute2014$IssuerId)
+attribute2014$BusinessYear <- as.factor(attribute2014$BusinessYear)
+attribute2014 <- attribute2014 %>% select(-(PlanId))
+attribute2014 <- attribute2014 %>% rename(PlanId = StandardComponentId)
+
+attribute2014 <- attribute2014 %>% select(BusinessYear, DiseaseManagementProgramsNumber, AVCalculatorOutputNumber,
+                                          SourceName, 
+                                  EHBPercentTotalPremium, EHBPercentPremiumS4, FirstTierUtilization, 
+                                  SecondTierUtilization, IsGuaranteedRate, IssuerActuarialValue, 
+                                  IsNewPlan, IssuerId, IssuerId2, MetalLevel, PlanId, StateCode, 
+                                  UniquePlanDesign, WellnessProgramOffered, PlanType, NationalNetwork, 
+                                  InpatientCopaymentMaximumDays, BeginPrimaryCareCostSharingAfterNumberOfVisits, 
+                                  BeginPrimaryCareDeductibleCoinsuranceAfterNumberOfCopays,
+                                  TEHBDedInnTier1Family, TEHBDedInnTier1Coinsurance, TEHBDedInnTier1Individual, 
+                                  TEHBInnTier1IndividualMOOP, TEHBInnTier1FamilyMOOP)
+
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, sc}
+
+benefits <- copy_to(sc, benefit2014)
+rates <- copy_to(sc, rate2014)
+attributes <- copy_to(sc, attribute2014)
+
+```
+
+```{r echo=FALSE, Joining_Tables}
+
+df1 <- inner_join(rates, benefits)
+
+df <- inner_join(df1, attributes)
+
+#df <- unique(df)
+```
+
+
+
+```{r echo=FALSE, warning=FALSE, CollectTable}
+
+issuer_plan <- df %>% 
+  filter(CopayInnTier1Value != -1 & CoinsInnTier1Value != -1 & IssuerActuarialValue != -1 &
+           TEHBDedInnTier1Family != -1 & TEHBDedInnTier1Individual != -1 & TEHBInnTier1IndividualMOOP != -1) %>%
+  group_by(IssuerId, PlanId, MetalLevel) %>%
+  summarise(IndividualRateMean = mean(IndividualRate), CopayT1Mean = mean(CopayInnTier1Value),
+            CoinsT1Mean = mean(CoinsInnTier1Value), TEHBDedCoinsurance = mean(TEHBDedInnTier1Coinsurance),
+            TEHBDedFamilyMean =  mean(TEHBDedInnTier1Family),TEHBDedIndividualMean = mean(TEHBDedInnTier1Individual),
+            TEHBIndividualMOOP = mean(TEHBInnTier1IndividualMOOP), TEHBFamilyMOOP = mean(TEHBInnTier1FamilyMOOP),
+            IssuerAVMean = mean(IssuerActuarialValue), numberofDMPOffered = mean(DiseaseManagementProgramsNumber)) %>%
+  collect
+
+issuer_age <- df %>%
+  group_by(IssuerId, Age) %>%
+  summarise(IndividualRateMean = mean(IndividualRate)) %>%
+  collect
+
+benefit_rate <- df %>%
+  filter(CopayInnTier1Value != -1 & CoinsInnTier1Value != -1 & IssuerActuarialValue != -1 & 
+        TEHBDedInnTier1Family != -1 & TEHBDedInnTier1Individual != -1 & 
+           TEHBInnTier1IndividualMOOP != -1) %>%
+  group_by(BenefitName, MetalLevel) %>%
+  summarise(IndividualRateMean = mean(IndividualRate),
+            CopayT1Mean = mean(CopayInnTier1Value),
+            CoinsT1Mean = mean(CoinsInnTier1Value),
+            TEHBDedCoinsurance = mean(TEHBDedInnTier1Coinsurance),
+            TEHBDedFamilyMean =  mean(TEHBDedInnTier1Family),
+            TEHBDedIndividualMean = mean(TEHBDedInnTier1Individual),
+            TEHBIndividualMOOP = mean(TEHBInnTier1IndividualMOOP),
+            TEHBFamilyMOOP = mean(TEHBInnTier1FamilyMOOP),
+            numberofDMPOffered = mean(DiseaseManagementProgramsNumber),
+            IssuerAV = mean(IssuerActuarialValue)) %>%
+  collect
+
+data<-benefit_rate %>%
+  arrange(IndividualRateMean)
+
+
+```
+
+```{r echo=FALSE, warning=FALSE, Issuer_Plan_EDA}
+
+issuer_plan$MetalLevel <- factor(issuer_plan$MetalLevel,
+                                 levels = c("Bronze","Silver","Gold","Platinum"))
+
+
+ggcorr(issuer_plan, hjust = 0.9, size = 2, label = TRUE)
+
+issuer_plan %>%
+  ggplot(aes(x = MetalLevel, y = IndividualRateMean)) +
+  geom_boxplot(col="black", fill="blue", alpha = 0.3) +
+    stat_summary(fun.y = mean, colour = "red", geom = "point",
+               shape = 18, size = 3) +
+  scale_y_continuous(limits = c(200,600))
+
+ggplot(issuer_plan,aes(IndividualRateMean, 
+                  fill = MetalLevel, colour = MetalLevel)) +
+   geom_density(alpha = 0.1) +
+  scale_x_continuous(limits=c(0,1000))
+
+issuer_plan %>%
+  ggplot(aes(x = MetalLevel, y = CopayT1Mean)) +
+  geom_boxplot(col="black", fill="blue", alpha = 0.3) +
+    stat_summary(fun.y = mean, colour = "red", geom = "point",
+               shape = 18, size = 3) +
+  scale_y_continuous(limits = c(0,50))
+
+issuer_plan %>%
+  ggplot(aes(x = MetalLevel, y = CoinsT1Mean)) +
+  geom_boxplot(col="black", fill="blue", alpha = 0.3) +
+    stat_summary(fun.y = mean, colour = "red", geom = "point",
+               shape = 18, size = 3) +
+  scale_y_continuous(limits = c(0,0.3))
+
+issuer_plan %>%
+  ggplot(aes(x = MetalLevel, y = IssuerAVMean)) +
+  geom_boxplot(col="black", fill="blue", alpha = 0.3) +
+    stat_summary(fun.y = mean, colour = "red", geom = "point",
+               shape = 18, size = 3) +
+  scale_y_continuous(limits = c(50,100))
+
+issuer_plan %>%
+  ggplot(aes(x = MetalLevel, y = TEHBFamilyMOOP)) +
+  geom_boxplot(col="black", fill="blue", alpha = 0.3) +
+    stat_summary(fun.y = mean, colour = "red", geom = "point",
+               shape = 18, size = 3)
+
+issuer_plan %>%
+  ggplot(aes(x = MetalLevel, y = TEHBDedFamilyMean)) +
+  geom_boxplot(col="black", fill="blue", alpha = 0.3) +
+    stat_summary(fun.y = mean, colour = "red", geom = "point",
+               shape = 18, size = 3)
+
+issuer_plan %>%
+  ggplot(aes(x = IssuerAVMean, y = IndividualRateMean)) +
+  geom_jitter(alpha=0.5) +
+  scale_y_continuous(limits = c(0,1000)) +
+  geom_smooth(method = 'lm')
+
+issuer_plan %>%
+  ggplot(aes(x = TEHBDedFamilyMean, y = IndividualRateMean)) +
+  geom_jitter(alpha = 0.3) +
+  scale_y_continuous(limits = c(0,1000)) +
+  geom_smooth(method = 'lm')
+
+by(issuer_plan$IndividualRateMean, issuer_plan$MetalLevel, summary)
+cor.test(issuer_plan$IndividualRateMean, issuer_plan$IssuerAVMean)
+
+```
+
+```{r echo=FALSE, warning=FALSE, Benefit_Rate_EDA}
+
+benefit_rate$MetalLevel <- factor(benefit_rate$MetalLevel,
+                                 levels = c("Bronze","Silver","Gold","Platinum"))
+
+ggcorr(benefit_rate, hjust = 0.9, size = 2, label = TRUE)
+
+benefit_rate %>%
+  ggplot(aes(x = TEHBDedFamilyMean, y = IndividualRateMean)) +
+  geom_point() +
+  scale_y_continuous(limits = c(250,750)) +
+  geom_smooth(method = 'lm')
+
+benefit_rate %>%
+  ggplot(aes(x = IssuerAV, y = IndividualRateMean)) +
+  geom_point() +
+  scale_y_continuous(limits = c(250,750)) +
+  geom_smooth(method = 'lm')
+
+benefit_rate %>%
+  ggplot(aes(x = numberofDMPOffered, y = IndividualRateMean)) +
+  geom_point() +
+  scale_y_continuous(limits = c(250,750)) +
+  geom_smooth(method = 'lm')
+
+
+cor.test(benefit_rate$IndividualRateMean, benefit_rate$TEHBDedFamilyMean)
+
+```
+
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, local_join}
+
+rate2014Family <- rate2014 %>%
+  filter(Age == 99)
+
+df2014 <- inner_join(rate2014Family, benefit2014, by = c("PlanId","IssuerId", "IssuerId2","BusinessYear",
+                                                         "SourceName","StateCode"))
+
+df2014new <- inner_join(df2014, attribute2014, by = c("PlanId", "IssuerId", "IssuerId2", "StateCode", "BusinessYear",
+                                                      "SourceName"))
+
+df2014new <- unique(df2014new)
+dff2014 <- df2014new[!is.na(df2014new$IndividualRate),]
+
+
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, EDA123}
+
+
+
+df2014new %>%
+  group_by(BenefitName) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n)) %>%
+  top_n(30) %>%
+  ggplot(aes(x = BenefitName, y = n)) +
+  geom_col() +
+    theme(axis.text.x = element_text(angle = 33, hjust = 1))
+
+data <- df2014new %>%
+  group_by(BenefitName) %>%
+  summarise(meanIndividualRate = mean(IndividualRate),
+            medianIndividualRate = median(IndividualRate))
+
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, plot_benefits}
+
+data <- df2014new %>%
+  filter (!is.na(Couple)) %>%
+  group_by(MetalLevel) %>%
+  summarise(meanRate = mean(IndividualRate),
+            minRate = min(IndividualRate),
+            maxRate = max(IndividualRate))
+
+```
